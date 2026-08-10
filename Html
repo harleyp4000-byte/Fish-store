@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bait & Switch Shop - Mobile Tycoon</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(() => console.log("PWA Engine Registered!"))
+                .catch(err => console.log("PWA Engine Error:", err));
+        }
+    </script>
+
+    <style>
+        body {
+            margin: 0;
+            background: #111827;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+            user-select: none;
+            touch-action: none;
+        }
+        h1 { margin: 2px 0; font-size: 18px; color: #4e9f3d; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        #game-container { position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.8); border-radius: 8px; overflow: hidden; }
+        canvas { background: #241710; display: block; }
+        
+        .game-menu {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(30, 20, 12, 0.98);
+            border: 4px solid #4e9f3d;
+            border-radius: 10px;
+            padding: 15px;
+            width: 320px;
+            box-shadow: 0 0 25px black;
+            text-align: center;
+            z-index: 10;
+        }
+        .game-menu h3 { margin-top: 0; color: #fef08a; font-size: 16px; border-bottom: 2px solid #4e9f3d; padding-bottom: 5px; margin-bottom: 10px;}
+        .menu-btn {
+            background: #1f2937;
+            color: #f9fafb;
+            border: 2px solid #4b5563;
+            padding: 10px;
+            margin: 5px 0;
+            width: 100%;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-sizing: border-box;
+            font-size: 13px;
+        }
+        .menu-btn:hover:not(:disabled) { background: #4e9f3d; border-color: #d1fae5; }
+        .menu-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .close-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 8px 18px;
+            margin-top: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        #hud-instructions { margin-top: 4px; font-size: 11px; color: #9ca3af; text-align: center; max-width: 800px;}
+        .badge { background: #374151; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+        .free-badge { background: #059669; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; animation: blink 1s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        .score-row { display: flex; justify-content: space-between; padding: 4px 10px; background: rgba(255,255,255,0.05); margin: 3px 0; border-radius: 4px; font-size: 12px;}
+        
+        /* Mobile Touch UI Controls Overlay */
+        #mobile-controls {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+            z-index: 5;
+        }
+        .dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 45px);
+            grid-template-rows: repeat(3, 45px);
+            gap: 3px;
+            pointer-events: auto;
+        }
+        .dpad-btn {
+            background: rgba(55, 65, 81, 0.7);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: white;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .dpad-btn:active { background: #4e9f3d; }
+        .action-container {
+            display: flex;
+            gap: 10px;
+            pointer-events: auto;
+        }
+        .action-btn {
+            width: 55px;
+            height: 55px;
+            background: rgba(2, 132, 199, 0.8);
+            border: 2px solid rgba(255,255,255,0.4);
+            color: white;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .action-btn:active { background: #4e9f3d; }
+    </style>
+</head>
+<body>
+
+    <h1>🎣 Bait & Switch Shop: Mobile Tycoon 🏪</h1>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="500"></canvas>
+        
+        <!-- Mobile Touch Controller Elements Inside Canvas Wrapper -->
+        <div id="mobile-controls">
+            <div class="dpad">
+                <div></div>
+                <div class="dpad-btn" ontouchstart="setTouchKey('w', true)" ontouchend="setTouchKey('w', false)">▲</div>
+                <div></div>
+                <div class="dpad-btn" ontouchstart="setTouchKey('a', true)" ontouchend="setTouchKey('a', false)">◀</div>
+                <div style="background: rgba(255,255,255,0.1); border-radius:8px;"></div>
+                <div class="dpad-btn" ontouchstart="setTouchKey('d', true)" ontouchend="setTouchKey('d', false)">▶</div>
+                <div></div>
+                <div class="dpad-btn" ontouchstart="setTouchKey('s', true)" ontouchend="setTouchKey('s', false)">▼</div>
+                <div></div>
+            </div>
+            <div class="action-container">
+                <div class="action-btn" style="background: rgba(217, 119, 6, 0.8);" ontouchstart="toggleLayoutMode()">🛠️</div>
+                <div class="action-btn" ontouchstart="triggerInteraction()">E</div>
+            </div>
+        </div>
+
+        <!-- Crafting Menu -->
+        <div id="crafting-menu" class="game-menu">
+            <h3>🪱 Crafting Workbench</h3>
+            <button id="btn-craft-neon" class="menu-btn" onclick="craftBait('Neon Lure')">
+                <span>Worms x1 + Garlic x1</span> <span>➡️ Neon Lure</span>
+            </button>
+            <button id="btn-craft-dough" class="menu-btn" onclick="craftBait('Garlic Doughball')">
+                <span>Dough x1 + Garlic x2</span> <span>➡️ Garlic Dough</span>
+            </button>
+            <button id="btn-craft-minnow" class="menu-btn" onclick="craftBait('Spicy Minnow')">
+                <span>Minnow x1 + Garlic x1</span> <span>➡️ Spicy Minnow</span>
+            </button>
+            <button class="close-btn" onclick="closeAllMenus()">Close</button>
+        </div>
+
+        <!-- Supplier Upgrade Menu -->
+        <div id="buy-menu" class="game-menu">
+            <h3>🛒 Supplier & Upgrades Store</h3>
+            <button class="menu-btn" onclick="buyIngredient('garlic', 0)">
+                <span>🧄 Fresh Garlic</span> <span class="free-badge">FREE</span>
+            </button>
+            <button id="btn-buy-worm" class="menu-btn" onclick="buyIngredient('worms', 10)">
+                <span>🪱 Box of Worms</span> <span class="badge">💰 10 Gold</span>
+            </button>
+            <button id="btn-buy-dough" class="menu-btn" onclick="buyIngredient('dough', 5)">
+                <span>🍞 Crafting Dough</span> <span class="badge">💰 5 Gold</span>
+            </button>
+            <button id="btn-buy-minnow" class="menu-btn" onclick="buyIngredient('minnows', 20)">
+                <span>🐟 Live Minnows</span> <span class="badge">💰 20 Gold</span>
+            </button>
+            <button id="btn-buy-mixer" class="menu-btn" onclick="buyAutoMixer()">
+                <span>⚙️ Auto-Mixer Machine</span> <span id="mixer-cost-label" class="badge" style="background:#0284c7;">💰 120 Gold</span>
+            </button>
+            <button id="btn-buy-clerk" class="menu-btn" onclick="buyClerk()">
+                <span>🧑‍💼 Hire Cashier Clerk</span> <span id="clerk-cost-label" class="badge" style="background:#0284c7;">💰 100 Gold</span>
+            </button>
+            <button class="close-btn" onclick="closeAllMenus()">Close</button>
+        </div>
+
+        <!-- Leaderboard Summary -->
+        <div id="leaderboard-menu" class="game-menu">
+            <h3>📊 Local High Score Records</h3>
+            <div id="leaderboard-list" style="max-height: 140px; overflow-y: auto; margin-bottom: 10px;"></div>
+            <button class="close-btn" style="background:#059669;" onclick="startNewDay()">Start Next Day</button>
+        </div>
+    </div>
+    
+    <div id="hud-instructions">
+        Use on-screen **D-Pad** to move, **[E]** to interact. Tap **[🛠️]** to lock/unlock Layout Moving Mode.
+    </div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+// Native Synth Sound Engine
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(type) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+
+    if (type === 'buy') {
+        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
